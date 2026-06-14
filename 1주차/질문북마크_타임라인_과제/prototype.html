@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>질문 북마크 타임라인 — HID 프로토타입 v0.1</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a;
+    --text:#e7e9ee; --muted:#9aa3b2; --soft:#c4cad6;
+    --accent:#6ea8fe; --accent2:#7ee0c0; --warn:#ffb86b; --mark:#ff6b8b;
+    --radius:14px; --shadow:0 8px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:radial-gradient(1200px 600px at 80% -10%, #1b2030 0%, var(--bg) 60%);
+    color:var(--text);
+    font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:18px 18px 60px}
+
+  /* Header */
+  header.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+  .brand{display:flex;flex-direction:column;gap:2px}
+  .brand h1{font-size:18px;margin:0;letter-spacing:-.3px}
+  .brand .sub{font-size:12px;color:var(--muted)}
+  .spacer{flex:1}
+  .statebadge{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);
+    padding:6px 10px;border-radius:999px;font-size:12px;color:var(--soft)}
+  .statebadge .dot{width:8px;height:8px;border-radius:50%;background:var(--accent2);box-shadow:0 0 10px var(--accent2)}
+  .mode{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px}
+  .mode button{all:unset;cursor:pointer;font-size:12.5px;color:var(--muted);padding:7px 13px;border-radius:999px;transition:.15s}
+  .mode button.active{background:var(--accent);color:#0b1020;font-weight:700}
+  .btn{all:unset;cursor:pointer;background:var(--panel);border:1px solid var(--line);color:var(--soft);
+    font-size:12.5px;padding:8px 13px;border-radius:10px;transition:.15s}
+  .btn:hover{border-color:var(--accent);color:var(--text)}
+  .btn.primary{background:var(--accent);color:#0b1020;border-color:transparent;font-weight:700}
+
+  /* Layout */
+  .grid{display:grid;grid-template-columns:1.15fr .95fr;gap:16px}
+  @media (max-width:920px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+
+  /* Player */
+  .player{padding:16px}
+  .lec-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .lec-title{font-size:13.5px;color:var(--soft);font-weight:600}
+  .lec-time{font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--muted)}
+  .live{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--mark);margin-left:8px}
+  .live .pulse{width:7px;height:7px;border-radius:50%;background:var(--mark);box-shadow:0 0 8px var(--mark)}
+  .live.beating .pulse{animation:pulse 1.2s ease-in-out 6}
+  @keyframes pulse{0%{opacity:.3}50%{opacity:1}100%{opacity:.3}}
+
+  .caption{background:linear-gradient(180deg,#11243a,#10202f);border:1px solid #1f3a5a;border-radius:12px;
+    padding:18px;min-height:96px;display:flex;align-items:center;font-size:18px;line-height:1.5;letter-spacing:-.2px}
+  .caption.dim{color:var(--muted);background:var(--panel2);border-color:var(--line);font-size:14px}
+
+  .stream{margin-top:12px;height:150px;overflow:auto;padding-right:6px;border-top:1px dashed var(--line);padding-top:10px}
+  .stream .ln{font-size:13px;color:#6b7384;padding:4px 0;line-height:1.4;transition:.2s}
+  .stream .ln.cur{color:var(--text);font-weight:600}
+  .stream .ln.past{color:#828b9c}
+  .stream .ln .t{display:inline-block;width:46px;color:#566;font-variant-numeric:tabular-nums;font-size:11px}
+
+  .controls{display:flex;align-items:center;gap:10px;margin-top:14px}
+  .play{all:unset;cursor:pointer;width:42px;height:42px;border-radius:50%;background:var(--accent);color:#0b1020;
+    display:grid;place-items:center;font-size:16px;font-weight:800;flex-shrink:0}
+  .progress{flex:1;height:8px;background:var(--panel2);border-radius:999px;position:relative;cursor:pointer;border:1px solid var(--line)}
+  .progress .fill{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:999px;width:0%}
+  .progress .pin{position:absolute;top:-4px;width:3px;height:16px;background:var(--mark);border-radius:2px;transform:translateX(-50%);box-shadow:0 0 6px var(--mark)}
+  .speed{font-size:12px;color:var(--muted);display:flex;gap:4px;align-items:center}
+  .speed select{background:var(--panel2);color:var(--soft);border:1px solid var(--line);border-radius:8px;padding:5px 7px;font-size:12px}
+
+  /* Mark button */
+  .markbar{margin-top:16px;display:flex;gap:10px;align-items:center}
+  .markbtn{all:unset;cursor:pointer;flex:1;text-align:center;background:linear-gradient(180deg,#ff6b8b,#e8517a);
+    color:#fff;font-weight:800;font-size:15px;padding:15px;border-radius:12px;box-shadow:0 8px 24px rgba(255,107,139,.28);transition:.12s}
+  .markbtn:active{transform:scale(.98)}
+  .markbtn small{display:block;font-weight:500;font-size:11px;opacity:.85;margin-top:3px}
+  .kbd{font-size:11px;color:var(--muted)}
+  .kbd b{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:2px 6px;color:var(--soft)}
+
+  .flash{position:fixed;inset:0;background:var(--mark);opacity:0;pointer-events:none;transition:opacity .35s;z-index:50}
+  .flash.on{opacity:.16}
+
+  /* Right panel: timeline */
+  .rail{padding:16px;display:flex;flex-direction:column;min-height:520px}
+  .rail-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .rail-head h2{font-size:14px;margin:0}
+  .rail-head .count{font-size:12px;color:var(--muted)}
+  .empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);text-align:center;gap:10px;padding:30px}
+  .empty .big{font-size:34px}
+  .empty p{font-size:13px;line-height:1.6;margin:0;max-width:240px}
+
+  .cards{display:flex;flex-direction:column;gap:12px;overflow:auto;padding-right:4px}
+  .qcard{background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--mark);border-radius:12px;padding:13px;animation:rise .25s ease}
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .qcard .qhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .qcard .ts{font-variant-numeric:tabular-nums;font-size:12px;color:var(--mark);font-weight:700;display:flex;align-items:center;gap:6px}
+  .qcard .stage{font-size:10.5px;color:var(--muted);border:1px solid var(--line);padding:2px 7px;border-radius:999px}
+  .ctx{font-size:12px;color:var(--soft);background:#141821;border:1px dashed var(--line);border-radius:9px;padding:9px;line-height:1.55;margin-bottom:10px}
+  .ctx .lbl{display:block;font-size:10.5px;color:var(--muted);margin-bottom:4px;letter-spacing:.3px}
+  .cands{display:flex;flex-direction:column;gap:7px}
+  .chip{all:unset;cursor:pointer;font-size:12.5px;color:var(--soft);background:#161b24;border:1px solid var(--line);
+    border-radius:9px;padding:9px 11px;line-height:1.4;transition:.12s}
+  .chip:hover{border-color:var(--accent);color:var(--text);background:#19202b}
+  .chip .q{color:var(--accent);font-weight:700;margin-right:6px}
+  .editrow{display:flex;gap:6px;margin-top:8px}
+  .editrow input{flex:1;background:#11151c;border:1px solid var(--line);color:var(--text);border-radius:9px;padding:9px 10px;font-size:12.5px;font-family:inherit}
+  .editrow input:focus{outline:none;border-color:var(--accent)}
+  .editrow button{all:unset;cursor:pointer;background:var(--accent);color:#0b1020;font-weight:700;font-size:12px;padding:0 14px;border-radius:9px;display:grid;place-items:center}
+
+  .answer{margin-top:4px}
+  .answer .qline{font-size:13px;color:var(--text);font-weight:700;margin-bottom:7px;line-height:1.45}
+  .answer .qline:before{content:"Q. ";color:var(--accent)}
+  .answer .aline{font-size:13px;color:var(--soft);line-height:1.65;background:#101620;border:1px solid var(--line);border-radius:10px;padding:11px}
+  .answer .aline:before{content:"A. ";color:var(--accent2);font-weight:700}
+  .answer .reask{margin-top:8px}
+  .answer .reask button{all:unset;cursor:pointer;font-size:11.5px;color:var(--muted)}
+  .answer .reask button:hover{color:var(--accent)}
+
+  /* Chat (legacy) mode */
+  .chatlog{flex:1;overflow:auto;display:flex;flex-direction:column;gap:10px;padding-right:4px}
+  .miss{background:#2a1d20;border:1px solid #50343a;color:var(--warn);font-size:12px;border-radius:10px;padding:10px;margin-bottom:10px;line-height:1.5}
+  .bub{max-width:85%;font-size:13px;line-height:1.55;padding:10px 12px;border-radius:12px}
+  .bub.u{align-self:flex-end;background:var(--accent);color:#0b1020}
+  .bub.a{align-self:flex-start;background:var(--panel2);border:1px solid var(--line);color:var(--soft)}
+  .chatin{display:flex;gap:7px;margin-top:10px}
+  .chatin input{flex:1;background:#11151c;border:1px solid var(--line);color:var(--text);border-radius:10px;padding:11px;font-size:13px;font-family:inherit}
+  .chatin input:focus{outline:none;border-color:var(--accent)}
+  .chatin button{all:unset;cursor:pointer;background:var(--accent);color:#0b1020;font-weight:700;padding:0 16px;border-radius:10px;display:grid;place-items:center}
+
+  .note{font-size:12px;color:var(--muted);line-height:1.6;margin-top:12px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px}
+  .note b{color:var(--soft)}
+
+  /* Review overlay */
+  .overlay{position:fixed;inset:0;background:rgba(8,10,14,.86);z-index:100;display:none;align-items:center;justify-content:center;padding:24px}
+  .overlay.on{display:flex}
+  .review{background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:680px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+  .review .rh{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line)}
+  .review .rh h2{margin:0;font-size:16px}
+  .review .stats{display:flex;gap:18px;padding:14px 18px;border-bottom:1px solid var(--line)}
+  .stat{display:flex;flex-direction:column;gap:2px}
+  .stat .n{font-size:22px;font-weight:800;color:var(--accent2)}
+  .stat .l{font-size:11px;color:var(--muted)}
+  .review .rbody{overflow:auto;padding:14px 18px;display:flex;flex-direction:column;gap:12px}
+  .ritem{border-left:2px solid var(--mark);padding-left:12px}
+  .ritem .rts{font-size:12px;color:var(--mark);font-weight:700;font-variant-numeric:tabular-nums}
+  .ritem .rq{font-size:13.5px;color:var(--text);font-weight:600;margin:4px 0}
+  .ritem .ra{font-size:12.5px;color:var(--soft);line-height:1.6}
+  .ritem .pending{font-size:12px;color:var(--warn)}
+  .close{all:unset;cursor:pointer;color:var(--muted);font-size:20px;line-height:1}
+</style>
+</head>
+<body>
+<div class="flash" id="flash"></div>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>질문 북마크 타임라인</h1>
+    </div>
+    <div class="spacer"></div>
+    <div class="statebadge"><span class="dot" id="stateDot"></span><span id="stateLabel">Listening</span></div>
+    <div class="mode" id="modeToggle">
+      <button data-mode="bookmark" class="active">질문 북마크 방식</button>
+      <button data-mode="chat">기존 채팅 방식</button>
+    </div>
+    <button class="btn" id="reviewBtn">⟲ 복습 모드</button>
+  </header>
+
+  <div class="grid">
+    <!-- ===== Player ===== -->
+    <section class="card player">
+      <div class="lec-head">
+        <div class="lec-title">📺 온라인 강의 · A/B 테스트 기초: 통계적 유의성 이해하기
+          <span class="live" id="liveTag"><span class="pulse"></span>LIVE</span>
+        </div>
+        <div class="lec-time"><span id="curTime">0:00</span> / <span id="totTime">0:00</span></div>
+      </div>
+
+      <div class="caption" id="caption">재생 버튼을 눌러 강의를 시작하세요.</div>
+
+      <div class="stream" id="stream"></div>
+
+      <div class="controls">
+        <button class="play" id="playBtn">▶</button>
+        <div class="progress" id="progress"><div class="fill" id="fill"></div></div>
+        <div class="speed">속도
+          <select id="speed">
+            <option value="1">1x</option>
+            <option value="2">2x</option>
+            <option value="4" selected>4x</option>
+            <option value="8">8x</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- bookmark mode action -->
+      <div class="markbar" id="markbar">
+        <button class="markbtn" id="markBtn">❓ 막힘 — 지금 이 순간 표시
+          <small>흐름을 멈추지 않고 직전 맥락만 저장해요</small>
+        </button>
+      </div>
+      <div class="markbar" style="margin-top:8px;justify-content:space-between">
+        <span class="kbd">단축키: <b>Q</b> 막힘 표시 · <b>K</b> 재생/정지</span>
+        <span class="kbd" id="hintCount"></span>
+      </div>
+
+      <!-- chat mode action -->
+      <div id="chatActionInfo" style="display:none" class="note">
+        <b>기존 채팅 방식 체험:</b> 질문을 입력하는 동안에도 강의는 계속 흐릅니다.
+        입력창에 글을 쓰는 중 지나가는 자막은 “놓친 구간”으로 집계됩니다. 이 방식의 마찰을 직접 느껴보세요.
+      </div>
+    </section>
+
+    <!-- ===== Right rail ===== -->
+    <section class="card rail" id="rail">
+      <!-- filled by JS depending on mode -->
+    </section>
+  </div>
+
+</div>
+
+<!-- Review overlay -->
+<div class="overlay" id="overlay">
+  <div class="review">
+    <div class="rh">
+      <h2>⟲ 복습 — 내가 막힌 지점들</h2>
+      <button class="close" id="closeReview">✕</button>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="n" id="stMarked">0</span><span class="l">막힌 지점</span></div>
+      <div class="stat"><span class="n" id="stAnswered">0</span><span class="l">해결한 질문</span></div>
+      <div class="stat"><span class="n" id="stPending">0</span><span class="l">미해결</span></div>
+    </div>
+    <div class="rbody" id="reviewBody"></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   질문 북마크 타임라인 — 프로토타입 로직 (vanilla JS, no build)
+   ============================================================ */
+
+// --- 더미 강의 transcript (시간 단위: 초) + 개념 태그 ---
+const TRANSCRIPT = [
+  [0,   "안녕하세요. 오늘은 A/B 테스트의 기초인 ‘통계적 유의성’을 다뤄보겠습니다.", "intro"],
+  [8,   "A/B 테스트는 두 버전 A와 B를 사용자에게 무작위로 나눠 보여주는 실험입니다.", "basics"],
+  [17,  "예를 들어 버튼 색을 파랑(A)과 초록(B)으로 나눠 전환율을 비교하는 거죠.", "basics"],
+  [27,  "여기서 핵심 질문은 ‘관찰된 차이가 진짜인가, 아니면 우연인가’입니다.", "intro"],
+  [36,  "이 질문에 답하기 위해 ‘귀무가설’이라는 개념을 사용합니다.", "hypothesis"],
+  [45,  "귀무가설은 ‘두 버전 사이에 차이가 없다’고 가정하는 출발점입니다.", "hypothesis"],
+  [55,  "우리가 보이려는 것은 이 귀무가설을 기각할 수 있는가입니다.", "hypothesis"],
+  [65,  "이때 등장하는 것이 바로 p-value, 즉 유의확률입니다.", "pvalue"],
+  [74,  "p-value는 ‘차이가 없다고 가정했을 때 이 정도 차이가 우연히 나올 확률’입니다.", "pvalue"],
+  [85,  "보통 p값이 0.05보다 작으면 통계적으로 유의하다고 판단합니다.", "pvalue"],
+  [95,  "하지만 0.05라는 기준 자체는 절대적 규칙이 아니라 하나의 관습입니다.", "pvalue"],
+  [105, "다음으로 표본 크기, 즉 몇 명을 대상으로 실험하는지가 매우 중요합니다.", "samplesize"],
+  [115, "표본이 너무 작으면 진짜 차이가 있어도 그것을 못 잡아낼 수 있습니다.", "samplesize"],
+  [125, "이렇게 진짜 효과를 놓치는 것을 2종 오류라고 부릅니다.", "errors"],
+  [135, "반대로 차이가 없는데 있다고 잘못 판단하는 것은 1종 오류입니다.", "errors"],
+  [146, "이 둘의 균형을 잡기 위해 ‘검정력’이라는 개념을 함께 봅니다.", "power"],
+  [156, "검정력은 진짜 효과가 있을 때 그것을 제대로 탐지할 확률입니다.", "power"],
+  [166, "보통 검정력 0.8, 즉 80%를 목표로 표본 크기를 미리 계산합니다.", "power"],
+  [177, "마지막으로 결과를 볼 때 신뢰구간도 함께 확인하는 습관이 좋습니다.", "ci"],
+  [187, "신뢰구간은 ‘진짜 효과가 있을 법한 범위’를 보여주기 때문입니다.", "ci"],
+  [197, "정리하면 유의성은 p값 하나가 아니라 표본·검정력·신뢰구간을 함께 봐야 합니다.", "summary"],
+  [207, "오늘 내용은 다음 시간 ‘다중 비교 문제’로 이어집니다. 수고하셨습니다.", "outro"],
+];
+const DURATION = 216;
+
+// --- 개념별 질문 후보 + 답변 (더미 LLM 지식베이스) ---
+const KB = {
+  hypothesis: {
+    cands: [
+      ["왜 ‘차이가 없다’부터 가정하나요?",
+       "차이가 없다고 먼저 가정하면, 데이터가 그 가정을 깰 만큼 강한지를 객관적으로 따질 수 있기 때문입니다. ‘차이가 있다’를 기본값으로 두면 보고 싶은 대로 해석하기 쉬워서, 보수적으로 ‘없다’에서 출발합니다."],
+      ["귀무가설과 대립가설은 어떻게 다른가요?",
+       "귀무가설(H0)은 ‘두 버전이 같다’, 대립가설(H1)은 ‘두 버전이 다르다’입니다. 실험은 H1을 직접 증명하는 게 아니라, H0이 버티기 어려울 만큼 증거가 강한지를 봅니다."],
+      ["예시로 설명해줘",
+       "버튼 색 실험이라면 H0=‘파랑과 초록의 전환율이 같다’, H1=‘둘이 다르다’가 됩니다. 데이터가 충분히 한쪽으로 치우치면 H0을 기각하고 ‘색에 따라 다르다’고 결론냅니다."],
+    ]
+  },
+  pvalue: {
+    cands: [
+      ["p값이 작으면 왜 ‘유의하다’고 보나요?",
+       "p값이 작다는 건 ‘차이가 없다고 가정했을 때 이런 결과가 나오기 매우 드물다’는 뜻입니다. 그만큼 ‘차이가 없다’는 가정이 의심스러워지므로 유의하다고 판단합니다."],
+      ["p값이 ‘효과가 진짜일 확률’인가요?",
+       "아닙니다. 흔한 오해인데, p값은 ‘효과가 진짜일 확률’이 아니라 ‘효과가 없다고 가정했을 때 이만한 차이가 우연히 나올 확률’입니다. 효과의 크기 자체와는 다릅니다."],
+      ["0.05 기준은 어디서 나온 건가요?",
+       "0.05는 통계학자 피셔가 제안한 관습적 기준일 뿐 자연 법칙이 아닙니다. 위험이 큰 의사결정에서는 0.01을, 탐색적 실험에서는 0.1을 쓰기도 합니다."],
+    ]
+  },
+  samplesize: {
+    cands: [
+      ["표본이 작으면 왜 차이를 못 잡나요?",
+       "표본이 작으면 우연에 의한 출렁임(노이즈)이 커서, 진짜 차이가 그 노이즈에 묻혀버립니다. 그래서 효과가 있어도 통계적으로 ‘유의하지 않다’고 나올 수 있습니다."],
+      ["표본은 얼마나 커야 충분한가요?",
+       "정해진 답은 없고, ‘얼마나 작은 차이를’ ‘어느 검정력으로’ 잡고 싶은지에 따라 사전에 계산합니다. 작은 차이를 확실히 잡고 싶을수록 더 큰 표본이 필요합니다."],
+      ["예시로 설명해줘",
+       "동전을 10번 던져 6번 앞면이면 우연 같지만, 1000번 던져 600번이면 ‘이 동전 이상하다’고 확신하게 되죠. 표본이 클수록 같은 비율 차이도 더 믿을 수 있습니다."],
+    ]
+  },
+  errors: {
+    cands: [
+      ["1종 오류와 2종 오류는 어떻게 다른가요?",
+       "1종 오류는 ‘차이가 없는데 있다고 판단’(거짓 양성), 2종 오류는 ‘차이가 있는데 없다고 판단’(거짓 음성)입니다. p값 기준은 1종 오류를, 검정력은 2종 오류를 통제합니다."],
+      ["둘 중 뭐가 더 위험한가요?",
+       "상황에 따라 다릅니다. 잘못 도입하면 큰일인 결정에서는 1종 오류가 더 위험하고, 좋은 기능을 놓치면 손해인 경우엔 2종 오류가 더 아픕니다."],
+      ["예시로 설명해줘",
+       "화재경보로 비유하면, 불이 안 났는데 울리는 게 1종 오류, 불이 났는데 안 울리는 게 2종 오류입니다."],
+    ]
+  },
+  power: {
+    cands: [
+      ["검정력은 왜 0.8을 목표로 하나요?",
+       "0.8은 ‘진짜 효과가 있을 때 80% 확률로 잡아낸다’는 관습적 목표치입니다. 더 높이려면 표본을 크게 늘려야 해서, 비용과 균형을 맞춘 현실적 기준입니다."],
+      ["검정력과 p값 기준은 무슨 관계인가요?",
+       "p값 기준(보통 0.05)은 1종 오류를, 검정력(보통 0.8)은 2종 오류를 통제합니다. 한쪽을 조이면 다른 쪽이나 표본 크기가 영향을 받는 트레이드오프 관계입니다."],
+      ["예시로 설명해줘",
+       "검정력 0.8로 설계한 실험은, 실제로 효과가 있는 상황을 10번 재현하면 약 8번은 ‘유의하다’고 잡아낸다는 뜻입니다."],
+    ]
+  },
+  ci: {
+    cands: [
+      ["p값이 있는데 신뢰구간을 왜 또 보나요?",
+       "p값은 ‘유의한가/아닌가’만 알려주지만, 신뢰구간은 ‘효과가 어느 정도 크기인가’까지 보여줍니다. 유의해도 효과가 너무 작으면 실무에선 의미 없을 수 있어 함께 봅니다."],
+      ["신뢰구간 95%는 정확히 무슨 뜻인가요?",
+       "‘같은 실험을 100번 반복하면 그중 약 95번의 구간이 진짜 값을 포함한다’는 뜻입니다. 특정 구간 하나가 95% 확률로 정답을 담고 있다는 뜻은 아닙니다."],
+      ["예시로 설명해줘",
+       "전환율 차이가 ‘+2%’로 유의하게 나와도, 신뢰구간이 [+0.1%, +3.9%]라면 효과가 거의 0에 가까울 수도 있다는 뜻이라 신중해집니다."],
+    ]
+  },
+  _generic: {
+    cands: [
+      ["이 개념이 왜 필요한가요?",
+       "지금 흐름에서 이 개념은 ‘관찰된 차이를 믿어도 되는가’를 판단하는 토대가 되기 때문에 필요합니다. 이게 없으면 우연한 차이에 휘둘리게 됩니다."],
+      ["앞 내용과 차이가 뭔가요?",
+       "앞에서는 ‘무엇을 비교하는가’(실험 설계)를 다뤘다면, 지금은 ‘그 결과를 어떻게 믿을 것인가’(판단 기준)로 넘어온 단계입니다."],
+      ["예시로 설명해줘",
+       "버튼 색 A/B 테스트에서 A가 B보다 전환율이 조금 높게 나왔을 때, ‘이걸 진짜라고 봐도 되나?’를 따지는 장면을 떠올리면 됩니다."],
+    ]
+  }
+};
+
+// --- 상태 ---
+let clock = 0;            // 강의 가상 시간(초)
+let playing = false;
+let speed = 4;
+let mode = "bookmark";    // 'bookmark' | 'chat'
+let marks = [];           // {id, t, ctx:[lines], stage:'cand'|'answered', question, answer, concept}
+let missedLines = 0;      // 채팅 모드에서 놓친 자막 수
+let chatTyping = false;
+let lastChatTrackTime = 0;
+let markSeq = 1;
+let timer = null;
+
+const $ = (s)=>document.querySelector(s);
+const fmt = (s)=>{s=Math.max(0,Math.floor(s));return Math.floor(s/60)+":"+String(s%60).padStart(2,"0");};
+
+function curIndex(){ let i=0; for(let k=0;k<TRANSCRIPT.length;k++){ if(TRANSCRIPT[k][0]<=clock) i=k; else break; } return i; }
+function setState(label){ $("#stateLabel").textContent=label; }
+
+// --- 플레이어 렌더 ---
+function renderStream(){
+  const idx=curIndex();
+  const s=$("#stream"); s.innerHTML="";
+  TRANSCRIPT.forEach((ln,k)=>{
+    const d=document.createElement("div");
+    d.className="ln"+(k===idx?" cur":(k<idx?" past":""));
+    d.innerHTML='<span class="t">'+fmt(ln[0])+'</span>'+ln[1];
+    s.appendChild(d);
+  });
+  const cur=s.querySelector(".cur");
+  if(cur) cur.scrollIntoView({block:"center",behavior:"smooth"});
+}
+function renderPlayer(){
+  const idx=curIndex();
+  $("#caption").textContent = clock<=0 && !playing ? "재생 버튼(▶)을 눌러 강의를 시작하세요." : TRANSCRIPT[idx][1];
+  $("#caption").classList.toggle("dim", clock<=0 && !playing);
+  $("#curTime").textContent=fmt(clock);
+  $("#totTime").textContent=fmt(DURATION);
+  $("#fill").style.width=(clock/DURATION*100)+"%";
+  $("#playBtn").textContent=playing?"⏸":"▶";
+  $("#liveTag").style.visibility=playing?"visible":"hidden";
+  $("#liveTag").classList.toggle("beating",playing);
+  // pins
+  $("#progress").querySelectorAll(".pin").forEach(p=>p.remove());
+  marks.forEach(m=>{
+    const pin=document.createElement("div");
+    pin.className="pin"; pin.style.left=(m.t/DURATION*100)+"%";
+    pin.title="막힌 지점 "+fmt(m.t);
+    $("#progress").appendChild(pin);
+  });
+  renderStream();
+}
+
+// --- 틱 ---
+function tick(){
+  if(!playing) return;
+  clock += 0.1*speed;
+  if(mode==="chat" && chatTyping){
+    // 입력 중 지나간 자막 집계
+    const before = TRANSCRIPT.filter(l=>l[0]<=lastChatTrackTime).length;
+    const now = TRANSCRIPT.filter(l=>l[0]<=clock).length;
+    if(now>before){ missedLines += (now-before); renderRail(); }
+    lastChatTrackTime = clock;
+  }
+  if(clock>=DURATION){ clock=DURATION; playing=false; setState("Review"); }
+  renderPlayer();
+}
+function play(){ playing=!playing; if(playing){ setState(mode==="chat"?"Listening":"Listening"); lastChatTrackTime=clock; } renderPlayer(); }
+
+// --- 막힘 표시 (북마크 핵심 인터랙션) ---
+function mark(){
+  if(mode!=="bookmark") return;
+  const t = clock;
+  // 직전 20~30초 맥락 캡처
+  const from = Math.max(0, t-28);
+  const ctx = TRANSCRIPT.filter(l=>l[0]>=from && l[0]<=t).map(l=>l[1]);
+  const concept = TRANSCRIPT[curIndex()][2];
+  const m = {id:markSeq++, t, ctx, concept, stage:"cand", question:null, answer:null};
+  marks.push(m);
+  marks.sort((a,b)=>a.t-b.t);
+  // 시각 피드백 (흐름은 멈추지 않음)
+  $("#flash").classList.add("on"); setTimeout(()=>$("#flash").classList.remove("on"),200);
+  setState("Marked");
+  renderPlayer(); renderRail();
+}
+
+function conceptCands(concept){ return (KB[concept]||KB._generic).cands; }
+
+function chooseQuestion(id, q, a){
+  const m=marks.find(x=>x.id===id); if(!m)return;
+  m.question=q; m.answer=a; m.stage="answered";
+  setState("Answered");
+  renderRail();
+}
+function customQuestion(id, text){
+  const m=marks.find(x=>x.id===id); if(!m||!text.trim())return;
+  const base=(KB[m.concept]||KB._generic).cands[0][1];
+  const a = "말씀하신 ‘"+(m.ctx[m.ctx.length-1]||"")+"’ 맥락을 기준으로 보면, "+base;
+  chooseQuestion(id, text.trim(), a);
+}
+function reask(id){ const m=marks.find(x=>x.id===id); if(!m)return; m.stage="cand"; m.question=null; m.answer=null; setState("Question Candidate"); renderRail(); }
+
+// --- 오른쪽 패널 렌더 ---
+function renderRail(){
+  const rail=$("#rail");
+  if(mode==="bookmark"){
+    $("#markbar").style.display="flex";
+    $("#chatActionInfo").style.display="none";
+    let html='<div class="rail-head"><h2>🔖 질문 타임라인</h2><span class="count">'+marks.length+'개 표시됨</span></div>';
+    if(marks.length===0){
+      html+='<div class="empty"><div class="big">🎧</div><p>강의를 들으며 이해가 막히는 순간 <b>‘막힘’</b> 버튼(또는 <b>Q</b>)을 누르세요.<br>흐름을 멈추지 않고 그 순간의 맥락이 카드로 저장됩니다.</p></div>';
+    } else {
+      html+='<div class="cards">';
+      marks.forEach(m=>{
+        const stageLabel = m.stage==="answered" ? "Answered" : "질문 후보";
+        html+='<div class="qcard"><div class="qhead"><span class="ts">⏱ '+fmt(m.t)+' 막힌 지점</span><span class="stage">'+stageLabel+'</span></div>';
+        html+='<div class="ctx"><span class="lbl">📎 자동 저장된 직전 맥락 (약 '+Math.min(28,Math.round(m.t))+'초)</span>'+m.ctx.map(c=>"· "+c).join("<br>")+'</div>';
+        if(m.stage==="cand"){
+          html+='<div class="cands">';
+          conceptCands(m.concept).forEach((c,i)=>{
+            html+='<button class="chip" data-act="choose" data-id="'+m.id+'" data-i="'+i+'"><span class="q">Q'+(i+1)+'</span>'+c[0]+'</button>';
+          });
+          html+='</div>';
+          html+='<div class="editrow"><input type="text" placeholder="직접 질문을 다듬어 입력…" data-edit="'+m.id+'"><button data-act="custom" data-id="'+m.id+'">보내기</button></div>';
+        } else {
+          html+='<div class="answer"><div class="qline">'+m.question+'</div><div class="aline">'+m.answer+'</div>';
+          html+='<div class="reask"><button data-act="reask" data-id="'+m.id+'">↺ 다른 질문으로 다시 묻기</button></div></div>';
+        }
+        html+='</div>';
+      });
+      html+='</div>';
+    }
+    rail.innerHTML=html;
+  } else {
+    // chat (legacy) mode
+    $("#markbar").style.display="none";
+    document.querySelectorAll(".markbar")[1].style.display="none";
+    $("#chatActionInfo").style.display="block";
+    let html='<div class="rail-head"><h2>💬 채팅 (기존 방식)</h2><span class="count">선형 로그</span></div>';
+    if(missedLines>0){
+      html+='<div class="miss">⚠ 질문을 작성하는 동안 지나간 자막: <b>'+missedLines+'줄</b><br>질문 하나 만드느라 강의 흐름을 그만큼 놓쳤습니다.</div>';
+    }
+    html+='<div class="chatlog" id="chatlog"></div>';
+    html+='<div class="chatin"><input type="text" id="chatInput" placeholder="질문을 입력하세요 (예: 방금 그 p값 부분이…)"><button id="chatSend">전송</button></div>';
+    rail.innerHTML=html;
+    renderChat();
+    const ci=$("#chatInput");
+    ci.addEventListener("focus",()=>{chatTyping=true;lastChatTrackTime=clock;});
+    ci.addEventListener("input",()=>{chatTyping=ci.value.length>0;});
+    ci.addEventListener("blur",()=>{chatTyping=false;});
+    ci.addEventListener("keydown",e=>{if(e.key==="Enter")sendChat();});
+    $("#chatSend").addEventListener("click",sendChat);
+  }
+}
+let chatMsgs=[];
+function sendChat(){
+  const ci=$("#chatInput"); const v=ci.value.trim(); if(!v)return;
+  chatMsgs.push({u:true,text:v});
+  // 더미 응답: 맥락이 없어 일반적으로 답함 (의도적으로 ‘어느 부분’인지 되묻는 마찰 표현)
+  chatMsgs.push({u:false,text:"어느 부분을 말씀하시는지 조금 더 설명해주실 수 있을까요? 방금 강의에서 다룬 내용이 여러 개라, 정확한 맥락을 알려주시면 답변드리겠습니다."});
+  ci.value=""; chatTyping=false; renderChat();
+}
+function renderChat(){
+  const log=$("#chatlog"); if(!log)return; log.innerHTML="";
+  chatMsgs.forEach(m=>{const b=document.createElement("div");b.className="bub "+(m.u?"u":"a");b.textContent=m.text;log.appendChild(b);});
+  log.scrollTop=log.scrollHeight;
+}
+
+// --- 복습 모드 ---
+function openReview(){
+  const answered=marks.filter(m=>m.stage==="answered").length;
+  $("#stMarked").textContent=marks.length;
+  $("#stAnswered").textContent=answered;
+  $("#stPending").textContent=marks.length-answered;
+  const body=$("#reviewBody");
+  if(marks.length===0){ body.innerHTML='<div class="empty"><p>아직 표시한 막힌 지점이 없습니다. 강의를 들으며 막히는 순간을 표시해보세요.</p></div>'; }
+  else{
+    body.innerHTML=marks.map(m=>{
+      let s='<div class="ritem"><div class="rts">⏱ '+fmt(m.t)+'</div>';
+      if(m.stage==="answered"){ s+='<div class="rq">Q. '+m.question+'</div><div class="ra">A. '+m.answer+'</div>'; }
+      else{ s+='<div class="rq">'+(m.ctx[m.ctx.length-1]||"")+'</div><div class="pending">· 아직 질문을 고르지 않았어요 (미해결)</div>'; }
+      return s+'</div>';
+    }).join("");
+  }
+  $("#overlay").classList.add("on");
+  setState("Review");
+}
+
+// --- 이벤트 바인딩 ---
+$("#playBtn").addEventListener("click",play);
+$("#markBtn").addEventListener("click",mark);
+$("#reviewBtn").addEventListener("click",openReview);
+$("#closeReview").addEventListener("click",()=>$("#overlay").classList.remove("on"));
+$("#overlay").addEventListener("click",e=>{if(e.target===$("#overlay"))$("#overlay").classList.remove("on");});
+$("#speed").addEventListener("change",e=>{speed=parseFloat(e.target.value);});
+$("#progress").addEventListener("click",e=>{
+  const r=e.currentTarget.getBoundingClientRect();
+  clock=Math.min(DURATION,Math.max(0,(e.clientX-r.left)/r.width*DURATION));
+  renderPlayer();
+});
+$("#modeToggle").addEventListener("click",e=>{
+  const b=e.target.closest("button"); if(!b)return;
+  mode=b.dataset.mode;
+  $("#modeToggle").querySelectorAll("button").forEach(x=>x.classList.toggle("active",x===b));
+  document.querySelectorAll(".markbar").forEach(mb=>mb.style.display = mode==="bookmark"?"flex":"none");
+  renderRail();
+});
+// delegated clicks in rail (bookmark)
+$("#rail").addEventListener("click",e=>{
+  const b=e.target.closest("[data-act]"); if(!b)return;
+  const id=parseInt(b.dataset.id,10);
+  if(b.dataset.act==="choose"){ const i=parseInt(b.dataset.i,10); const m=marks.find(x=>x.id===id);
+    const c=conceptCands(m.concept)[i]; chooseQuestion(id,c[0],c[1]); }
+  else if(b.dataset.act==="custom"){ const inp=document.querySelector('[data-edit="'+id+'"]'); customQuestion(id,inp.value); }
+  else if(b.dataset.act==="reask"){ reask(id); }
+});
+// keyboard
+window.addEventListener("keydown",e=>{
+  if(e.target.tagName==="INPUT") return;
+  if(e.key==="q"||e.key==="Q"){ e.preventDefault(); mark(); }
+  if(e.key==="k"||e.key==="K"){ e.preventDefault(); play(); }
+});
+
+// --- 시작 ---
+timer=setInterval(tick,100);
+renderPlayer();
+renderRail();
+</script>
+</body>
+</html>

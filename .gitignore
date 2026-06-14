@@ -1,0 +1,16 @@
+# local tool/runtime artifacts
+.claude/
+.tmp_extract/
+**/.tmp_verify/
+**/.server.pid
+
+# dependencies and build outputs
+**/node_modules/
+**/.next/
+**/out/
+**/build/
+
+# local deployment/env
+**/.vercel/
+**/.env
+**/.env*.local
