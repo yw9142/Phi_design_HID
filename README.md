@@ -106,7 +106,7 @@ npm run build
 ## 프로젝트 구조
 
 ```text
-context-attach/
+Phi_design_HID/
 ├─ public/                      # 정적 공개 파일
 ├─ src/app/                     # Next.js 진입점, 전역 스타일, UI 회귀 테스트
 ├─ src/components/workspace/    # 기록, 채팅, 추천, 그래프 UI

@@ -1,16 +1,25 @@
-# local tool/runtime artifacts
+# Dependencies and framework output
+node_modules/
+.next/
+out/
+.vercel/
+*.tsbuildinfo
+
+# Local environment
+.env
+.env.*
+!.env.example
 .claude/
-.tmp_extract/
-**/.tmp_verify/
-**/.server.pid
 
-# dependencies and build outputs
-**/node_modules/
-**/.next/
-**/out/
-**/build/
+# Local runtime and verification output
+*.log
+tmp/
+docx-render/
+verification-*.png
+design-qa.md
 
-# local deployment/env
-**/.vercel/
-**/.env
-**/.env*.local
+# Intermediate product artifacts
+artifacts/*
+!artifacts/context-attach-keyscreen.png
+docs/plans/
+ContextAttach_1Pager.*
