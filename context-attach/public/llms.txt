@@ -1,0 +1,11 @@
+# Context Attach
+
+Context Attach is an interactive prototype for continuing LLM work with selected context from prior conversations.
+
+- [Open the prototype](./): Try the complete context recommendation, attachment, response, and graph flow.
+
+## Main experience
+
+- Review context recommendations for the current prompt.
+- Attach only the conversations that should inform the response.
+- Inspect the relationship graph and open a related conversation from a node.
